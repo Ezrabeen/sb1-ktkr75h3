@@ -25,9 +25,15 @@ import { getProductById } from "@/data/products"
 import { CheckoutModal } from "@/components/checkout-modal"
 import { useToast } from "@/components/ui/use-toast"
 import { LoginModal } from "@/components/login-modal"
+import { products } from "@/data/products"
 
-export default function ProductPage() {
-  const params = useParams()
+export function generateStaticParams() {
+  return products.map((product) => ({
+    id: product.id.toString()
+  }))
+}
+
+export default function ProductPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const { id } = params
   const { isConnected } = useWallet()

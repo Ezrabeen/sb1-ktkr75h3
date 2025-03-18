@@ -43,7 +43,7 @@ const topSellers = [
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("rewards")
 
-  return (
+    return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-3xl font-bold mb-8">Dashboard</h1>
       
@@ -56,48 +56,48 @@ export default function DashboardPage() {
             <div className="text-2xl font-bold">1,234.56 B3TR</div>
           </CardContent>
         </Card>
-        <Card>
+            <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Transactions</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">60</div>
-          </CardContent>
-        </Card>
-        <Card>
+              </CardContent>
+            </Card>
+            <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Rewards Earned</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">300 B3TR</div>
-          </CardContent>
-        </Card>
-        <Card>
+              </CardContent>
+            </Card>
+            <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Listings</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">12</div>
-          </CardContent>
-        </Card>
-      </div>
+              </CardContent>
+            </Card>
+          </div>
 
       <div className="grid gap-6 md:grid-cols-2 mb-8">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-primary" />
               Top Contributors
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
               {topContributors.map((contributor, index) => (
                 <div key={contributor.username} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                       <span className="text-sm font-medium">{index + 1}</span>
-                    </div>
+                  </div>
                     <div>
                       <p className="font-medium">{contributor.username}</p>
                       <p className="text-sm text-muted-foreground">{contributor.transactions} transactions</p>
@@ -109,18 +109,18 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
-            </div>
-          </CardContent>
-        </Card>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader>
+            <Card>
+              <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
               Top Sellers
             </CardTitle>
-          </CardHeader>
-          <CardContent>
+              </CardHeader>
+              <CardContent>
             <div className="space-y-4">
               {topSellers.map((seller, index) => (
                 <div key={seller.username} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
@@ -139,10 +139,10 @@ export default function DashboardPage() {
                   </div>
                 </div>
               ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
       <Tabs defaultValue="rewards" className="space-y-4">
         <TabsList>
@@ -173,11 +173,11 @@ export default function DashboardPage() {
         </TabsContent>
 
         <TabsContent value="transactions" className="space-y-4">
-          <Card>
-            <CardHeader>
+            <Card>
+              <CardHeader>
               <CardTitle>Transaction History</CardTitle>
-            </CardHeader>
-            <CardContent>
+              </CardHeader>
+              <CardContent>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={transactionData}>
@@ -188,22 +188,22 @@ export default function DashboardPage() {
                     <Line type="monotone" dataKey="count" stroke="#82ca9d" />
                   </LineChart>
                 </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+              </CardContent>
+            </Card>
         </TabsContent>
 
         <TabsContent value="listings" className="space-y-4">
-          <Card>
-            <CardHeader>
+            <Card>
+              <CardHeader>
               <CardTitle>Active Listings</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
                 {/* Dummy listing data */}
                 {[1, 2, 3].map((item) => (
                   <div key={item} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
+                      <div>
                       <h3 className="font-medium">Product {item}</h3>
                       <p className="text-sm text-muted-foreground">Listed on May {item}, 2024</p>
                     </div>
@@ -213,9 +213,9 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+              </CardContent>
+            </Card>
         </TabsContent>
       </Tabs>
     </div>

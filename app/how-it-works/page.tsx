@@ -67,7 +67,7 @@ export default function HowItWorksPage() {
               </Button>
             </CardContent>
           </Card>
-        </div>
+            </div>
 
         <Card className="mb-12">
           <CardHeader>
@@ -138,11 +138,11 @@ export default function HowItWorksPage() {
             <div className="flex gap-4">
               <Button onClick={() => router.push("/marketplace")}>
                 Start Shopping
-              </Button>
+            </Button>
               <Button variant="outline" onClick={() => router.push("/register")}>
                 Create Account
-              </Button>
-            </div>
+            </Button>
+          </div>
           </CardContent>
         </Card>
       </div>

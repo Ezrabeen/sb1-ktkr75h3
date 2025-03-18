@@ -44,7 +44,7 @@ export default function ProfilePage() {
     setIsLoading(true)
     try {
       await logout()
-      router.push("/")
+    router.push("/")
       toast.success("Logged out successfully")
     } catch (error) {
       toast.error("Failed to logout")
@@ -203,7 +203,7 @@ export default function ProfilePage() {
                   </p>
                 </div>
                 <Switch defaultChecked />
-              </div>
+                </div>
               <div className="pt-4">
                 <Button variant="destructive" onClick={handleLogout} disabled={isLoading}>
                   <LogOut className="mr-2 h-4 w-4" />
