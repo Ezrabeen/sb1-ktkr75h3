@@ -14,23 +14,47 @@
  * and user activities within the marketplace.
  */
 
-import { SUSTAINABILITY_TRACKING_ABI, CONTRACT_ADDRESSES } from './contract-utils';
+import { CONTRACT_ADDRESSES } from './contract-utils';
 
-// Tipe data untuk informasi keberlanjutan
-export interface SustainabilityData {
-  co2Saved: number;         // dalam kg
-  itemsRecycled: number;    // jumlah item
-  treesEquivalent: number;  // jumlah pohon yang setara dengan pengurangan CO2
-  sustainablePurchases: number; // jumlah pembelian berkelanjutan
-}
-
-// Konversi untuk menghitung dampak lingkungan
-const IMPACT_CONVERSIONS = {
-  CO2_PER_TREE_PER_YEAR: 25, // kg CO2 yang diserap oleh 1 pohon per tahun
-  CO2_PER_RECYCLED_ITEM: 2.5, // kg CO2 yang dihemat per item yang didaur ulang
+// Sustainability contract ABI (simplified for demo)
+const SUSTAINABILITY_TRACKING_ABI = {
+  functions: [
+    {
+      name: 'getProductSustainabilityScore',
+      inputs: [{ name: 'productId', type: 'uint256' }],
+      outputs: [{ name: 'score', type: 'uint256' }]
+    },
+    {
+      name: 'getUserSustainabilityScore',
+      inputs: [{ name: 'userAddress', type: 'address' }],
+      outputs: [{ name: 'score', type: 'uint256' }]
+    },
+    {
+      name: 'setProductSustainabilityScore',
+      inputs: [
+        { name: 'productId', type: 'uint256' },
+        { name: 'score', type: 'uint256' }
+      ],
+      outputs: [{ name: 'success', type: 'bool' }]
+    }
+  ]
 };
 
-// Dapatkan skor keberlanjutan untuk produk
+// Type for sustainability data
+export interface SustainabilityData {
+  co2Saved: number;         // in kg
+  itemsRecycled: number;    // number of items
+  treesEquivalent: number;  // number of trees equivalent to CO2 reduction
+  sustainablePurchases: number; // number of sustainable purchases
+}
+
+// Conversions for calculating environmental impact
+const IMPACT_CONVERSIONS = {
+  CO2_PER_TREE_PER_YEAR: 25, // kg CO2 absorbed by 1 tree per year
+  CO2_PER_RECYCLED_ITEM: 2.5, // kg CO2 saved per recycled item
+};
+
+// Get sustainability score for a product
 export const getProductSustainabilityScore = async (
   connex: any,
   productId: number
@@ -38,31 +62,31 @@ export const getProductSustainabilityScore = async (
   try {
     if (!connex) return 0;
     
-    // Dapatkan alamat kontrak sustainability
-    const contractAddress = CONTRACT_ADDRESSES.sustainabilityContract;
+    // Get sustainability contract address
+    const contractAddress = CONTRACT_ADDRESSES?.tokenContract || '';
     
-    // Buat instance kontrak
+    // Create contract instance
     const contract = connex.thor.account(contractAddress);
     
-    // Cari method getProductSustainabilityScore di ABI
+    // Find getProductSustainabilityScore method in ABI
     const scoreFunc = SUSTAINABILITY_TRACKING_ABI.functions.find(
-      func => func.name === 'getProductSustainabilityScore'
+      (func: any) => func.name === 'getProductSustainabilityScore'
     );
     if (!scoreFunc) throw new Error('getProductSustainabilityScore method not found in ABI');
     
-    // Panggil method
+    // Call method
     const method = contract.method(scoreFunc);
     const result = await method.call(productId);
     
-    // Kembalikan skor
+    // Return score
     return Number(result.decoded[0]);
   } catch (error) {
-    console.error("Error mendapatkan skor keberlanjutan produk:", error);
-    return 0; // Skor default jika error
+    console.error("Error getting product sustainability score:", error);
+    return 0; // Default score if error
   }
 };
 
-// Dapatkan skor keberlanjutan untuk pengguna
+// Get sustainability score for a user
 export const getUserSustainabilityScore = async (
   connex: any,
   userAddress: string
@@ -70,31 +94,31 @@ export const getUserSustainabilityScore = async (
   try {
     if (!connex || !userAddress) return 0;
     
-    // Dapatkan alamat kontrak sustainability
-    const contractAddress = CONTRACT_ADDRESSES.sustainabilityContract;
+    // Get sustainability contract address
+    const contractAddress = CONTRACT_ADDRESSES?.tokenContract || '';
     
-    // Buat instance kontrak
+    // Create contract instance
     const contract = connex.thor.account(contractAddress);
     
-    // Cari method getUserSustainabilityScore di ABI
+    // Find getUserSustainabilityScore method in ABI
     const scoreFunc = SUSTAINABILITY_TRACKING_ABI.functions.find(
-      func => func.name === 'getUserSustainabilityScore'
+      (func: any) => func.name === 'getUserSustainabilityScore'
     );
     if (!scoreFunc) throw new Error('getUserSustainabilityScore method not found in ABI');
     
-    // Panggil method
+    // Call method
     const method = contract.method(scoreFunc);
     const result = await method.call(userAddress);
     
-    // Kembalikan skor
+    // Return score
     return Number(result.decoded[0]);
   } catch (error) {
-    console.error("Error mendapatkan skor keberlanjutan pengguna:", error);
-    return 0; // Skor default jika error
+    console.error("Error getting user sustainability score:", error);
+    return 0; // Default score if error
   }
 };
 
-// Perbarui skor keberlanjutan untuk produk 
+// Update sustainability score for a product
 export const updateProductSustainabilityScore = async (
   connex: any,
   productId: number,
@@ -103,16 +127,16 @@ export const updateProductSustainabilityScore = async (
   try {
     if (!connex) return false;
     
-    // Dapatkan alamat kontrak
-    const contractAddress = CONTRACT_ADDRESSES.sustainabilityContract;
+    // Get contract address
+    const contractAddress = CONTRACT_ADDRESSES?.tokenContract || '';
     
-    // Cari method setProductSustainabilityScore di ABI
+    // Find setProductSustainabilityScore method in ABI
     const scoreFunc = SUSTAINABILITY_TRACKING_ABI.functions.find(
-      func => func.name === 'setProductSustainabilityScore'
+      (func: any) => func.name === 'setProductSustainabilityScore'
     );
     if (!scoreFunc) throw new Error('setProductSustainabilityScore method not found in ABI');
     
-    // Buat transaksi clause
+    // Create transaction clause
     const clause = {
       to: contractAddress,
       value: '0',
@@ -122,20 +146,20 @@ export const updateProductSustainabilityScore = async (
         .data
     };
     
-    // Tandatangani dan kirim transaksi
+    // Sign and send transaction
     const vendor = new (connex as any).Vendor('test');
     const txResponse = await vendor.sign('tx', [clause]);
     
     return !!txResponse.txid;
   } catch (error) {
-    console.error("Error memperbarui skor keberlanjutan produk:", error);
+    console.error("Error updating product sustainability score:", error);
     return false;
   }
 };
 
-// Hitung data keberlanjutan berdasarkan pembelian
+// Calculate sustainability impact based on purchases
 export const calculateSustainabilityImpact = (purchaseCount: number): SustainabilityData => {
-  // Asumsi rata-rata untuk setiap pembelian
+  // Assumptions for each purchase
   const avgCO2PerPurchase = 5; // kg
   const avgRecycledItemsPerPurchase = 1.5; // items
   
@@ -151,15 +175,15 @@ export const calculateSustainabilityImpact = (purchaseCount: number): Sustainabi
   };
 };
 
-// Ambil total dampak keberlanjutan dari blockchain
+// Fetch total sustainability impact from blockchain
 export const fetchSustainabilityData = async (connex: any): Promise<SustainabilityData> => {
   try {
-    // Mock data untuk saat ini, idealnya data diambil dari blockchain
-    // Perhitungan data ini nantinya akan dihitung melalui agregasi data dari blockchain
+    // Mock data for now, ideally this would be fetched from blockchain
+    // This data would be calculated through aggregation of blockchain data
     const totalPurchases = 3456;
     return calculateSustainabilityImpact(totalPurchases);
   } catch (error) {
-    console.error("Error mengambil data keberlanjutan:", error);
+    console.error("Error fetching sustainability data:", error);
     return {
       co2Saved: 1234.5,
       itemsRecycled: 5678,
