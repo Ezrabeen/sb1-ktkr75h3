@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useWallet } from "@/contexts/wallet-context"
 import { useToken } from "@/contexts/token-context"
 import { useTransaction } from "@/contexts/transaction-context"
+import { useVeChain } from "@/providers/VeChainProvider"
 import { useToast } from "@/components/ui/use-toast"
 import type { Product } from "@/data/products"
 import {
@@ -15,12 +16,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Loader2, CheckCircle, AlertCircle, Leaf, CreditCard, Wallet } from "lucide-react"
+import { Loader2, CheckCircle, AlertCircle, Leaf, CreditCard, Wallet, ArrowRightCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
+import Image from "next/image"
 
 interface CheckoutModalProps {
   product: Product
@@ -32,15 +34,25 @@ type PaymentMethod = "card" | "paypal" | "b3tr" | "vet"
 
 export function CheckoutModal({ product, isOpen, onClose }: CheckoutModalProps) {
   const { isConnected, connect } = useWallet()
-  const { calculateIncentive, getImpactCategory } = useToken()
+  const { calculateIncentive, getImpactCategory, addTokens } = useToken()
   const { addTransaction } = useTransaction()
+  const { connect: connectVeChain, account: veChainAccount, sendTransaction } = useVeChain()
   const { toast } = useToast()
 
   const [checkoutStep, setCheckoutStep] = useState<"details" | "payment" | "processing" | "success" | "error">(
     "details",
   )
   const [transaction, setTransaction] = useState<any>(null)
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("card")
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("vet")
+  const [processingSteps, setProcessingSteps] = useState({
+    connecting: false,
+    verifying: false,
+    sending: false,
+    confirming: false,
+    tokenizing: false,
+    completed: false,
+  })
+  const [transactionHash, setTransactionHash] = useState<string | null>(null)
 
   const impactCategory = getImpactCategory(product.category)
   const tokenIncentive = calculateIncentive(product.price, product.category)
@@ -52,24 +64,95 @@ export function CheckoutModal({ product, isOpen, onClose }: CheckoutModalProps) 
       await connect()
       return
     }
+    
+    // Check if VeChain wallet is connected
+    if (!veChainAccount) {
+      try {
+        await connectVeChain();
+        toast({
+          title: "Wallet Connected",
+          description: "VeChain wallet connected successfully",
+        });
+      } catch (error) {
+        toast({
+          title: "Wallet Connection Failed",
+          description: "Please make sure you have Sync2 wallet installed and unlocked.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+    
     setCheckoutStep("payment")
   }
 
   const handleCheckout = async () => {
-    setCheckoutStep("processing")
-
+    setCheckoutStep("processing");
+    
     try {
-      // Simulate payment processing delay
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      // Step 1: Connecting to wallet
+      setProcessingSteps((prev) => ({ ...prev, connecting: true }));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      
+      // If VET is selected as payment method, try to connect VeChain wallet if not already connected
+      if (paymentMethod === "vet" && !veChainAccount) {
+        await connectVeChain();
+      }
+      
+      setProcessingSteps((prev) => ({ ...prev, connecting: false, verifying: true }));
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      
+      // Step 2: Create transaction
+      setProcessingSteps((prev) => ({ ...prev, verifying: false, sending: true }));
+      
+      // If paying with VET, create a mock VeChain transaction
+      let txHash = "";
+      if (paymentMethod === "vet") {
+        try {
+          // Mock transaction data for sending VET
+          const mockClause = [{
+            to: "0x7567d83b7b8d80addcb281a71d54fc7b3364ffed", // Demo marketplace address
+            value: "0x" + (totalPrice * 10**18).toString(16), // Convert to wei-equivalent
+            data: "0x" // No data for simple transfer
+          }];
+          
+          // Send the transaction
+          txHash = await sendTransaction(mockClause);
+          setTransactionHash(txHash);
+        } catch (error) {
+          console.error("VeChain transaction error:", error);
+          throw new Error("Failed to send VeChain transaction");
+        }
+      } else {
+        // For other payment methods, generate a mock hash
+        txHash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`;
+        setTransactionHash(txHash);
+      }
+      
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      
+      // Step 3: Confirm transaction
+      setProcessingSteps((prev) => ({ ...prev, sending: false, confirming: true }));
+      
+      // Step 4: Mint B3TR tokens as reward
+      setProcessingSteps((prev) => ({ ...prev, confirming: false, tokenizing: true }));
+      
+      // Add tokens to user's balance
+      addTokens(tokenIncentive);
+      
+      await new Promise((resolve) => setTimeout(resolve, 1800));
+      
+      // Step 5: Complete transaction
+      setProcessingSteps((prev) => ({ ...prev, tokenizing: false, completed: true }));
 
-      // Create a new transaction
+      // Create a new transaction record
       const newTransaction = await addTransaction({
         productId: product.id,
         productName: product.name,
         productImage: product.images[0],
         productLink: product.productLink,
         price: totalPrice,
-        currency: product.currency,
+        currency: paymentMethod === "vet" ? "VET" : product.currency,
         tokensEarned: tokenIncentive,
         orderId: `ORD-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
         marketplace: product.marketplace,
@@ -77,11 +160,13 @@ export function CheckoutModal({ product, isOpen, onClose }: CheckoutModalProps) 
       })
 
       setTransaction(newTransaction)
+      
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       setCheckoutStep("success")
 
       toast({
         title: "Purchase Successful!",
-        description: `You've earned ${tokenIncentive.toFixed(2)} B3TR tokens`,
+        description: `You've earned ${tokenIncentive.toFixed(2)} B3TR tokens for this sustainable purchase`,
         variant: "success",
       })
     } catch (error) {
@@ -90,7 +175,7 @@ export function CheckoutModal({ product, isOpen, onClose }: CheckoutModalProps) 
 
       toast({
         title: "Purchase Failed",
-        description: "There was an error processing your purchase",
+        description: "There was an error processing your purchase. Please try again.",
         variant: "destructive",
       })
     }
@@ -100,7 +185,16 @@ export function CheckoutModal({ product, isOpen, onClose }: CheckoutModalProps) 
     // Reset state when closing
     setCheckoutStep("details")
     setTransaction(null)
-    setPaymentMethod("card")
+    setPaymentMethod("vet")
+    setProcessingSteps({
+      connecting: false,
+      verifying: false,
+      sending: false,
+      confirming: false,
+      tokenizing: false,
+      completed: false,
+    });
+    setTransactionHash(null);
     onClose()
   }
 
@@ -143,7 +237,7 @@ export function CheckoutModal({ product, isOpen, onClose }: CheckoutModalProps) 
       case "b3tr":
         return <Leaf className="h-4 w-4 mr-2" />
       case "vet":
-        return <Wallet className="h-4 w-4 mr-2" />
+        return <img src="/vechain-logo.png" alt="VeChain" className="h-4 w-4 mr-2" />
       default:
         return null
     }
@@ -158,7 +252,7 @@ export function CheckoutModal({ product, isOpen, onClose }: CheckoutModalProps) 
       case "b3tr":
         return "B3TR Token"
       case "vet":
-        return "VET"
+        return "VET (VeChain)"
       default:
         return ""
     }
@@ -250,60 +344,68 @@ export function CheckoutModal({ product, isOpen, onClose }: CheckoutModalProps) 
               <DialogDescription>Choose how you'd like to pay for your purchase.</DialogDescription>
             </DialogHeader>
 
-            <div className="py-4 space-y-4">
-              <RadioGroup value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2 border rounded-md p-3 cursor-pointer hover:bg-muted/50">
-                    <RadioGroupItem value="card" id="payment-card" />
-                    <Label htmlFor="payment-card" className="flex items-center cursor-pointer flex-1">
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Credit/Debit Card
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2 border rounded-md p-3 cursor-pointer hover:bg-muted/50">
-                    <RadioGroupItem value="paypal" id="payment-paypal" />
-                    <Label htmlFor="payment-paypal" className="flex items-center cursor-pointer flex-1">
-                      <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.607-.541c-.013.076-.026.175-.041.254-.59 3.025-2.566 4.643-5.813 4.643h-2.189c-.11 0-.217.022-.316.058l-.55 3.488c-.05.312.2.587.516.587h3.617c.43 0 .796-.312.863-.737l.035-.166.672-4.28.044-.236c.067-.425.434-.736.863-.736h.543c3.523 0 6.277-1.44 7.086-5.557.341-1.724.174-3.16-.733-4.171a2.782 2.782 0 0 0-.99-.606z" />
-                      </svg>
-                      PayPal
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2 border rounded-md p-3 cursor-pointer hover:bg-muted/50">
-                    <RadioGroupItem value="b3tr" id="payment-b3tr" />
-                    <Label htmlFor="payment-b3tr" className="flex items-center cursor-pointer flex-1">
-                      <Leaf className="h-4 w-4 mr-2" />
-                      B3TR Token
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2 border rounded-md p-3 cursor-pointer hover:bg-muted/50">
-                    <RadioGroupItem value="vet" id="payment-vet" />
-                    <Label htmlFor="payment-vet" className="flex items-center cursor-pointer flex-1">
-                      <Wallet className="h-4 w-4 mr-2" />
-                      VET
-                    </Label>
-                  </div>
+            <div className="py-4">
+              <RadioGroup
+                defaultValue={paymentMethod}
+                value={paymentMethod}
+                onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
+                className="space-y-3"
+              >
+                <div className="flex items-center space-x-2 border rounded-md p-3">
+                  <RadioGroupItem value="vet" id="payment-vet" />
+                  <Label htmlFor="payment-vet" className="flex items-center cursor-pointer flex-1">
+                    <img src="/vechain-logo.png" alt="VeChain" className="h-4 w-4 mr-2" />
+                    VET
+                  </Label>
+                  <span className="text-xs text-muted-foreground">Recommended</span>
+                </div>
+                <div className="flex items-center space-x-2 border rounded-md p-3">
+                  <RadioGroupItem value="card" id="payment-card" />
+                  <Label htmlFor="payment-card" className="flex items-center cursor-pointer flex-1">
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Credit/Debit Card
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2 border rounded-md p-3">
+                  <RadioGroupItem value="paypal" id="payment-paypal" />
+                  <Label htmlFor="payment-paypal" className="flex items-center cursor-pointer flex-1">
+                    <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106zm14.146-14.42a3.35 3.35 0 0 0-.607-.541c-.013.076-.026.175-.041.254-.59 3.025-2.566 4.643-5.813 4.643h-2.189c-.11 0-.217.022-.316.058l-.55 3.488c-.05.312.2.587.516.587h3.617c.43 0 .796-.312.863-.737l.035-.166.672-4.28.044-.236c.067-.425.434-.736.863-.736h.543c3.523 0 6.277-1.44 7.086-5.557.341-1.724.174-3.16-.733-4.171a2.782 2.782 0 0 0-.99-.606z" />
+                    </svg>
+                    PayPal
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2 border rounded-md p-3">
+                  <RadioGroupItem value="b3tr" id="payment-b3tr" />
+                  <Label htmlFor="payment-b3tr" className="flex items-center cursor-pointer flex-1">
+                    <Leaf className="h-4 w-4 mr-2" />
+                    B3TR Token
+                  </Label>
                 </div>
               </RadioGroup>
 
-              <div className="bg-muted/50 p-4 rounded-lg">
-                <div className="flex items-center">
-                  {getPaymentMethodIcon(paymentMethod)}
-                  <span className="font-medium">{getPaymentMethodLabel(paymentMethod)} Payment</span>
+              <div className="mt-6">
+                <h4 className="text-sm font-semibold mb-2">Order Summary</h4>
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subtotal:</span>
+                    <span>
+                      {product.currency} {product.price.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Shipping:</span>
+                    <span>
+                      {product.currency} {product.shipping.cost.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between font-semibold pt-2">
+                    <span>Total:</span>
+                    <span>
+                      {paymentMethod === "vet" ? "VET" : product.currency} {totalPrice.toFixed(2)}
+                    </span>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">
-                  This is a simulated payment for demonstration purposes. No actual payment will be processed.
-                </p>
-              </div>
-
-              <div className="flex justify-between font-bold">
-                <span>Total:</span>
-                <span>
-                  {product.currency} {totalPrice.toFixed(2)}
-                </span>
               </div>
             </div>
 
@@ -317,62 +419,204 @@ export function CheckoutModal({ product, isOpen, onClose }: CheckoutModalProps) 
         )}
 
         {checkoutStep === "processing" && (
-          <div className="py-12 flex flex-col items-center justify-center">
-            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-            <h3 className="text-lg font-medium">Processing Your Order</h3>
-            <p className="text-sm text-muted-foreground text-center mt-2">
-              Please wait while we process your {getPaymentMethodLabel(paymentMethod)} payment...
-            </p>
-          </div>
-        )}
-
-        {checkoutStep === "success" && transaction && (
           <>
             <DialogHeader>
-              <DialogTitle className="flex items-center text-green-600">
-                <CheckCircle className="mr-2 h-5 w-5" />
-                Purchase Successful!
-              </DialogTitle>
-              <DialogDescription>Your order has been confirmed and processed.</DialogDescription>
+              <DialogTitle>Processing Your Purchase</DialogTitle>
+              <DialogDescription>Please wait while we process your transaction.</DialogDescription>
             </DialogHeader>
 
-            <div className="py-4 space-y-4">
-              <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-lg border border-green-200 dark:border-green-800 text-center">
-                <CheckCircle className="h-12 w-12 mx-auto text-green-600 mb-4" />
-                <h4 className="font-medium text-green-800 dark:text-green-300 text-lg mb-2">
-                  Thank You For Your Purchase!
-                </h4>
-                <p className="text-green-700 dark:text-green-400 mb-4">
-                  Your order has been successfully processed. You've earned{" "}
-                  <strong>{tokenIncentive.toFixed(2)} B3TR tokens</strong> for your sustainable purchase.
-                </p>
-                <div className="text-sm text-green-600 dark:text-green-500 bg-green-100 dark:bg-green-900/40 p-2 rounded">
-                  <p className="font-medium">Payment Method: {getPaymentMethodLabel(paymentMethod)}</p>
+            <div className="py-8 space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center space-x-4">
+                  {processingSteps.connecting ? (
+                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                  ) : processingSteps.verifying || processingSteps.sending || processingSteps.confirming || processingSteps.tokenizing || processingSteps.completed ? (
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                  ) : (
+                    <div className="h-5 w-5 rounded-full border-2 border-muted" />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium">Connecting to wallet</p>
+                    <p className="text-sm text-muted-foreground">
+                      {processingSteps.connecting
+                        ? "Establishing secure connection..."
+                        : processingSteps.verifying || processingSteps.sending || processingSteps.confirming || processingSteps.tokenizing || processingSteps.completed
+                        ? "Connection established"
+                        : "Waiting"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-4">
+                  {processingSteps.verifying ? (
+                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                  ) : processingSteps.sending || processingSteps.confirming || processingSteps.tokenizing || processingSteps.completed ? (
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                  ) : (
+                    <div className="h-5 w-5 rounded-full border-2 border-muted" />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium">Verifying your account</p>
+                    <p className="text-sm text-muted-foreground">
+                      {processingSteps.verifying
+                        ? "Verifying wallet and balance..."
+                        : processingSteps.sending || processingSteps.confirming || processingSteps.tokenizing || processingSteps.completed
+                        ? "Account verified"
+                        : "Waiting"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-4">
+                  {processingSteps.sending ? (
+                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                  ) : processingSteps.confirming || processingSteps.tokenizing || processingSteps.completed ? (
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                  ) : (
+                    <div className="h-5 w-5 rounded-full border-2 border-muted" />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium">Processing payment</p>
+                    <p className="text-sm text-muted-foreground">
+                      {processingSteps.sending
+                        ? `Sending ${paymentMethod === "vet" ? "VET" : "payment"} to marketplace...`
+                        : processingSteps.confirming || processingSteps.tokenizing || processingSteps.completed
+                        ? `Transaction sent`
+                        : "Waiting"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-4">
+                  {processingSteps.confirming ? (
+                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                  ) : processingSteps.tokenizing || processingSteps.completed ? (
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                  ) : (
+                    <div className="h-5 w-5 rounded-full border-2 border-muted" />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium">Confirming payment</p>
+                    <p className="text-sm text-muted-foreground">
+                      {processingSteps.confirming
+                        ? "Waiting for confirmation on blockchain..."
+                        : processingSteps.tokenizing || processingSteps.completed
+                        ? "Payment confirmed"
+                        : "Waiting"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-4">
+                  {processingSteps.tokenizing ? (
+                    <Loader2 className="h-5 w-5 text-primary animate-spin" />
+                  ) : processingSteps.completed ? (
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                  ) : (
+                    <div className="h-5 w-5 rounded-full border-2 border-muted" />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-medium">Minting B3TR tokens</p>
+                    <p className="text-sm text-muted-foreground">
+                      {processingSteps.tokenizing
+                        ? `Minting ${tokenIncentive.toFixed(2)} B3TR as sustainability reward...`
+                        : processingSteps.completed
+                        ? `${tokenIncentive.toFixed(2)} B3TR minted to your wallet`
+                        : "Waiting"}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Order ID:</span>
-                  <span className="font-mono">{transaction.orderId}</span>
+              {transactionHash && (processingSteps.sending || processingSteps.confirming || processingSteps.tokenizing || processingSteps.completed) && (
+                <div className="bg-muted/50 p-3 rounded-md text-sm">
+                  <p className="text-xs font-medium mb-1">Transaction Hash</p>
+                  <p className="text-xs break-all text-muted-foreground font-mono">{transactionHash}</p>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Transaction Hash:</span>
-                  <span className="font-mono truncate max-w-[200px]">{transaction.txHash.substring(0, 10)}...</span>
+              )}
+            </div>
+          </>
+        )}
+
+        {checkoutStep === "success" && (
+          <>
+            <DialogHeader>
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900 mb-4">
+                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
+              <DialogTitle className="text-center">Purchase Successful!</DialogTitle>
+              <DialogDescription className="text-center">
+                Your order has been processed successfully.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-6 space-y-6">
+              <div className="bg-muted/30 p-4 rounded-lg space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Order ID</p>
+                  <p className="text-sm font-mono">{transaction?.orderId || "-"}</p>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">B3TR Tokens Earned:</span>
-                  <span className="font-medium text-primary">{transaction.tokensEarned.toFixed(2)} B3TR</span>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Product</p>
+                  <p className="text-sm">{product.name}</p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Total Paid</p>
+                  <p className="text-sm">{paymentMethod === "vet" ? "VET" : product.currency} {totalPrice.toFixed(2)}</p>
+                </div>
+                <Separator className="my-2" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Leaf className="h-4 w-4 text-primary" />
+                    <p className="text-sm font-medium">B3TR Reward</p>
+                  </div>
+                  <p className="text-sm font-medium text-primary">{tokenIncentive.toFixed(2)} B3TR</p>
+                </div>
+              </div>
+
+              {transactionHash && (
+                <div className="bg-muted/50 p-3 rounded-md text-sm">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs font-medium">Transaction Hash</p>
+                    <Link 
+                      href={`https://explore-testnet.vechain.org/transactions/${transactionHash}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-primary hover:underline flex items-center"
+                    >
+                      View <ExternalLink className="h-3 w-3 ml-1" />
+                    </Link>
+                  </div>
+                  <p className="text-xs break-all text-muted-foreground font-mono">{transactionHash}</p>
+                </div>
+              )}
+              
+              <div className="bg-primary-50 dark:bg-primary-900/20 p-4 rounded-lg">
+                <div className="flex items-center">
+                  <Leaf className="h-5 w-5 text-primary mr-2" />
+                  <div>
+                    <h4 className="text-sm font-medium">Environmental Impact</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Your sustainable choice just saved approximately {(tokenIncentive * 5).toFixed(1)} kg of CO₂ emissions!
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
 
             <DialogFooter className="flex flex-col sm:flex-row gap-2">
-              <Button variant="outline" className="sm:flex-1" onClick={handleClose}>
+              <Button variant="outline" onClick={handleClose} className="flex-1">
                 Close
               </Button>
-              <Button className="sm:flex-1" asChild>
-                <Link href="/profile">View in Profile</Link>
+              <Button
+                onClick={() => {
+                  handleClose()
+                  // Navigate to profile/purchases
+                  window.location.href = "/profile/purchases"
+                }}
+                className="flex-1"
+              >
+                View Orders
               </Button>
             </DialogFooter>
           </>
@@ -381,24 +625,31 @@ export function CheckoutModal({ product, isOpen, onClose }: CheckoutModalProps) 
         {checkoutStep === "error" && (
           <>
             <DialogHeader>
-              <DialogTitle className="flex items-center text-red-600">
-                <AlertCircle className="mr-2 h-5 w-5" />
-                Transaction Failed
-              </DialogTitle>
-              <DialogDescription>We couldn't process your purchase. Please try again.</DialogDescription>
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900 mb-4">
+                <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <DialogTitle className="text-center">Payment Failed</DialogTitle>
+              <DialogDescription className="text-center">
+                There was an error processing your payment. No funds have been deducted.
+              </DialogDescription>
             </DialogHeader>
 
-            <div className="py-4">
-              <p className="text-sm text-center text-muted-foreground">
-                If this problem persists, please contact support.
-              </p>
+            <div className="py-6">
+              <div className="bg-muted/30 p-4 rounded-lg">
+                <p className="text-sm text-muted-foreground">
+                  Please check your wallet connection and try again. If the problem persists, try using a different
+                  payment method or contact support.
+                </p>
+              </div>
             </div>
 
-            <DialogFooter>
-              <Button variant="outline" onClick={handleClose}>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button variant="outline" onClick={handleClose} className="flex-1">
                 Cancel
               </Button>
-              <Button onClick={() => setCheckoutStep("details")}>Try Again</Button>
+              <Button onClick={() => setCheckoutStep("payment")} className="flex-1">
+                Try Again
+              </Button>
             </DialogFooter>
           </>
         )}

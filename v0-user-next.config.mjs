@@ -26,7 +26,23 @@ const nextConfig = {
       fs: false,
       net: false,
       tls: false,
+      crypto: require.resolve('crypto-browserify'),
+      stream: require.resolve('stream-browserify'),
+      buffer: require.resolve('buffer'),
+      https: require.resolve('https-browserify'),
+      http: require.resolve('stream-http'),
+      path: require.resolve('path-browserify'),
+      zlib: require.resolve('browserify-zlib'),
+      os: require.resolve('os-browserify/browser'),
     };
+    
+    // Tambahkan polyfill untuk self
+    config.plugins.push(
+      new config.webpack.ProvidePlugin({
+        Buffer: ['buffer', 'Buffer'],
+        process: 'process/browser',
+      }),
+    );
     
     return config;
   },

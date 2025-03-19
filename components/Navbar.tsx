@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { LoginModal } from "@/components/login-modal"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { LanguageSwitcher } from "@/components/language-switcher"
 
 export function Navbar() {
   const router = useRouter()
@@ -69,8 +70,8 @@ export function Navbar() {
       className={cn(
         "fixed top-0 left-0 right-0 z-40 transition-all duration-200",
         isScrolled
-          ? "bg-background/95 backdrop-blur-md shadow-sm border-b"
-          : "bg-transparent border-transparent",
+          ? "bg-background/80 backdrop-blur-md shadow-sm border-b"
+          : "bg-transparent"
       )}
     >
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -171,41 +172,49 @@ export function Navbar() {
               </span>
             </Link>
 
-            <nav className="hidden md:flex items-center space-x-4">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.path}
-                  href={link.path}
-                  className={cn(
-                    "text-sm font-medium transition-colors hover:text-primary",
-                    pathname === link.path ? "text-primary" : "text-muted-foreground",
-                    link.className,
-                  )}
-                >
-                  {link.name}
-                </Link>
-              ))}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="text-sm font-medium text-muted-foreground hover:text-primary"
-                  >
-                    Categories
-                    <ChevronDown className="h-4 w-4 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  {["Clothing", "Electronics", "Furniture", "Books", "Toys", "Sports"].map((category) => (
-                    <DropdownMenuItem key={category} asChild>
-                      <Link href={`/categories/${category.toLowerCase()}`} className="w-full">
-                        {category}
-                      </Link>
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </nav>
+            <div className="hidden md:flex items-center">
+              <nav className="flex items-center">
+                {navLinks.map((link, index) => (
+                  <>
+                    <Link
+                      key={link.path}
+                      href={link.path}
+                      className={cn(
+                        "text-sm font-medium transition-colors hover:text-primary px-3 py-2",
+                        pathname === link.path ? "text-primary" : "text-muted-foreground",
+                        link.className,
+                      )}
+                    >
+                      {link.name}
+                    </Link>
+                    {index < navLinks.length - 1 && (
+                      <div className="h-4 w-px bg-border/50 mx-1"></div>
+                    )}
+                  </>
+                ))}
+                <div className="h-4 w-px bg-border/50 mx-1"></div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="text-sm font-medium text-muted-foreground hover:text-primary px-3 py-2"
+                    >
+                      Categories
+                      <ChevronDown className="h-4 w-4 ml-1" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    {["Clothing", "Electronics", "Furniture", "Books", "Toys", "Sports"].map((category) => (
+                      <DropdownMenuItem key={category} asChild>
+                        <Link href={`/categories/${category.toLowerCase()}`} className="w-full">
+                          {category}
+                        </Link>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </nav>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -221,7 +230,23 @@ export function Navbar() {
                 </Button>
               </Link>
 
+              <Link href="/wishlist">
+                <Button variant="ghost" size="icon" className="relative" aria-label="Wishlist">
+                  <Heart className="h-5 w-5" />
+                  {wishlistCount > 0 && (
+                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs">
+                      {wishlistCount}
+                    </Badge>
+                  )}
+                </Button>
+              </Link>
+
               <ThemeToggle />
+
+              {/* Skip rendering LanguageSwitcher on server and render only on client */}
+              {typeof window !== 'undefined' ? <LanguageSwitcher /> : null}
+
+              <div className="h-8 w-px bg-border/50 mx-1 hidden sm:block"></div>
 
               {isAuthenticated && user ? (
                 <DropdownMenu>
@@ -232,8 +257,17 @@ export function Navbar() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
                     <div className="p-2 border-b">
-                      <p className="text-sm font-medium">{user?.username}</p>
-                      <p className="text-xs text-muted-foreground truncate">{user?.walletAddress}</p>
+                      {user?.walletAddress ? (
+                        <>
+                          <p className="text-sm font-medium">Wallet</p>
+                          <p className="text-xs text-muted-foreground truncate">{`${user.walletAddress.slice(0, 6)}...${user.walletAddress.slice(-4)}`}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium">{user?.username}</p>
+                          <p className="text-xs text-muted-foreground truncate">No wallet connected</p>
+                        </>
+                      )}
                     </div>
                     <div className="p-2 border-b">
                       <p className="text-xs text-muted-foreground">B3TR Balance</p>
@@ -249,26 +283,36 @@ export function Navbar() {
                       <Link href="/profile/tokens">Token Rewards</Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem asChild>
-                      <Link href="/dashboard">Dashboard</Link>
+                      <Link href="/profile/listings">My Listings</Link>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsLoginModalOpen(true)}
-                  className="hidden md:flex items-center gap-2"
-                  disabled={network === "testnet" && isTestnetMaintenance}
-                >
-                  <img
-                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-MvAahbVuY5U7kkd2xfevPJCjFFZFu2.png"
-                    alt="VeWorld"
-                    className="h-4 w-auto object-contain"
-                  />
-                  Connect VeWorld
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="hidden sm:inline-flex gap-1.5 items-center"
+                    onClick={() => setIsLoginModalOpen(true)}
+                  >
+                    <img
+                      src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-MvAahbVuY5U7kkd2xfevPJCjFFZFu2.png"
+                      alt="VeWorld"
+                      className="h-4 w-auto"
+                    />
+                    Login with VeWorld
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="sm:hidden"
+                    onClick={() => setIsLoginModalOpen(true)}
+                    aria-label="Login"
+                  >
+                    <User className="h-5 w-5" />
+                  </Button>
+                </>
               )}
             </div>
           </div>

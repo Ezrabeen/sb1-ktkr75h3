@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { ethers } from "ethers"
+import Connex from '@vechain/connex'
 
 // Define the Thor network IDs
 const THOR_MAINNET_ID = 39
@@ -13,8 +13,7 @@ type ConnectionState = "disconnected" | "connecting" | "connected" | "error"
 type VeWorldContextType = {
   isConnected: boolean
   account: string | null
-  provider: ethers.BrowserProvider | null
-  signer: ethers.Signer | null
+  connex: Connex | null
   balance: string
   connect: () => Promise<void>
   disconnect: () => void
@@ -28,8 +27,7 @@ type VeWorldContextType = {
 const initialContext: VeWorldContextType = {
   isConnected: false,
   account: null,
-  provider: null,
-  signer: null,
+  connex: null,
   balance: "0",
   connect: async () => {},
   disconnect: () => {},
@@ -44,32 +42,43 @@ const VeWorldContext = createContext<VeWorldContextType>(initialContext)
 
 export const useVeWorld = () => useContext(VeWorldContext)
 
+// Helper to format VET balance
+const formatVET = (wei: string): string => {
+  const vet = Number(wei) / Math.pow(10, 18);
+  return vet.toFixed(4);
+}
+
 export function VeWorldProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false)
   const [account, setAccount] = useState<string | null>(null)
-  const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null)
-  const [signer, setSigner] = useState<ethers.Signer | null>(null)
+  const [connex, setConnex] = useState<Connex | null>(null)
   const [balance, setBalance] = useState("0")
   const [chainId, setChainId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [network, setNetwork] = useState<"mainnet" | "testnet" | "unknown">("unknown")
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected")
 
-  // Check if VeWorld is available
+  // Initialize Connex
+  useEffect(() => {
+    try {
+      // Initialize for testnet by default
+      const newConnex = new Connex({
+        node: 'https://testnet.vechain.org/',
+        network: 'test'
+      });
+      setConnex(newConnex);
+      setNetwork("testnet");
+      setChainId(THOR_TESTNET_ID);
+    } catch (error) {
+      console.error("Failed to initialize Connex:", error);
+    }
+  }, []);
+
+  // Check if VeWorld/Sync2 is available
   const detectWallet = (): boolean => {
-    if (typeof window === "undefined") return false
-
-    // Check for VeWorld browser extension
-    if (window.ethereum?.isVeWorld) return true
-
-    // Check for VeWorld mobile app
-    if (window.vechain?.thor) return true
-
-    // Check for generic ethereum provider that might be VeWorld
-    // This is a fallback for cases where the isVeWorld flag might not be present
-    if (window.ethereum && !window.ethereum.isMetaMask) return true
-
-    return false
+    return typeof window !== "undefined" && 
+           (!!window.connex || !!window.ethereum?.isVeWorld || 
+            !!window.vechain?.thor);
   }
 
   // Get network name based on chainId
@@ -90,72 +99,35 @@ export function VeWorldProvider({ children }: { children: ReactNode }) {
       if (!isWalletAvailable) {
         setConnectionState("error")
         console.error("VeWorld wallet not detected")
-        // Instead of redirecting, we'll return and let the UI handle this case
         return
       }
 
-      // Try connecting via window.ethereum (browser extension)
-      if (window.ethereum) {
-        const ethersProvider = new ethers.BrowserProvider(window.ethereum)
-
+      // Use Connex Vendor to sign certificate
+      if (connex) {
         try {
-          // Request account access
-          const accounts = await window.ethereum.request({
-            method: "eth_requestAccounts",
-          })
-
-          if (accounts.length > 0) {
-            // Get signer, account balance, and chain ID
-            const ethersSigner = await ethersProvider.getSigner()
-            const accountBalance = await ethersProvider.getBalance(accounts[0])
-            const { chainId: networkChainId } = await ethersProvider.getNetwork()
-
-            const networkName = getNetworkFromChainId(Number(networkChainId))
-
-            // Update state
-            setProvider(ethersProvider)
-            setSigner(ethersSigner)
-            setAccount(accounts[0])
-            setBalance(ethers.formatEther(accountBalance))
-            setChainId(Number(networkChainId))
-            setNetwork(networkName)
-            setIsConnected(true)
-            setConnectionState("connected")
-
-            console.log(`Connected to VeWorld on ${networkName} network`)
-          }
-        } catch (error) {
-          console.error("Error connecting with ethereum provider:", error)
-          setConnectionState("error")
-        }
-      }
-      // Try connecting via window.vechain.thor (mobile)
-      else if (window.vechain?.thor) {
-        try {
-          const accounts = await window.vechain.thor.request({
-            method: "eth_requestAccounts",
-          })
-
-          if (accounts.length > 0) {
-            setAccount(accounts[0])
-            setIsConnected(true)
-            setConnectionState("connected")
-
-            // Try to get network information if available
-            try {
-              const chainId = await window.vechain.thor.request({
-                method: "eth_chainId",
-              })
-              setChainId(Number(chainId))
-              setNetwork(getNetworkFromChainId(Number(chainId)))
-            } catch (error) {
-              console.error("Error getting chain ID:", error)
-              setNetwork("unknown")
+          const vendor = new Connex.Vendor('test');
+          const certificateResponse = await vendor.sign('cert', {
+            purpose: 'identification',
+            payload: {
+              type: 'text',
+              content: 'Connect to dApp'
             }
-          }
+          });
+          
+          setAccount(certificateResponse.annex.signer);
+          
+          // Get balance
+          const account = connex.thor.account(certificateResponse.annex.signer);
+          const accountInfo = await account.get();
+          setBalance(formatVET(accountInfo.balance));
+          
+          setIsConnected(true);
+          setConnectionState("connected");
+          
+          console.log(`Connected to VeWorld on ${network} network`);
         } catch (error) {
-          console.error("Error connecting with thor provider:", error)
-          setConnectionState("error")
+          console.error("Error connecting with Connex:", error);
+          setConnectionState("error");
         }
       }
     } catch (error) {
@@ -169,20 +141,17 @@ export function VeWorldProvider({ children }: { children: ReactNode }) {
   const disconnect = () => {
     setIsConnected(false)
     setAccount(null)
-    setProvider(null)
-    setSigner(null)
     setBalance("0")
-    setChainId(null)
-    setNetwork("unknown")
     setConnectionState("disconnected")
   }
 
   // Update balance
   const updateBalance = async () => {
-    if (isConnected && provider && account) {
+    if (isConnected && connex && account) {
       try {
-        const accountBalance = await provider.getBalance(account)
-        setBalance(ethers.formatEther(accountBalance))
+        const accountObj = connex.thor.account(account);
+        const accountInfo = await accountObj.get();
+        setBalance(formatVET(accountInfo.balance));
       } catch (error) {
         console.error("Error updating balance:", error)
       }
@@ -190,59 +159,6 @@ export function VeWorldProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    // Auto-detect and connect only if wallet is already connected
-    // to avoid unexpected wallet popups
-    const checkConnection = async () => {
-      if (detectWallet()) {
-        try {
-          if (window.ethereum) {
-            const accounts = await window.ethereum.request({
-              method: "eth_accounts", // This doesn't trigger a popup
-            })
-
-            if (accounts.length > 0) {
-              connect()
-            }
-          } else if (window.vechain?.thor) {
-            const accounts = await window.vechain.thor.request({
-              method: "eth_accounts", // This doesn't trigger a popup
-            })
-
-            if (accounts.length > 0) {
-              connect()
-            }
-          }
-        } catch (error) {
-          console.error("Error checking connection:", error)
-        }
-      }
-    }
-
-    checkConnection()
-
-    // Set up event listeners
-    if (window.ethereum) {
-      window.ethereum.on("accountsChanged", (accounts: string[]) => {
-        if (accounts.length > 0) {
-          connect()
-        } else {
-          disconnect()
-        }
-      })
-
-      window.ethereum.on("chainChanged", () => {
-        connect()
-      })
-    } else if (window.vechain?.thor) {
-      window.vechain.thor.on("accountsChanged", (accounts: string[]) => {
-        if (accounts.length > 0) {
-          connect()
-        } else {
-          disconnect()
-        }
-      })
-    }
-
     // Set up balance update interval when connected
     let balanceInterval: NodeJS.Timeout | null = null
 
@@ -250,12 +166,8 @@ export function VeWorldProvider({ children }: { children: ReactNode }) {
       balanceInterval = setInterval(updateBalance, 30000) // Update every 30 seconds
     }
 
-    // Cleanup listeners on unmount
+    // Cleanup
     return () => {
-      if (window.ethereum) {
-        window.ethereum.removeAllListeners("accountsChanged")
-        window.ethereum.removeAllListeners("chainChanged")
-      }
       if (balanceInterval) {
         clearInterval(balanceInterval)
       }
@@ -267,8 +179,7 @@ export function VeWorldProvider({ children }: { children: ReactNode }) {
       value={{
         isConnected,
         account,
-        provider,
-        signer,
+        connex,
         balance,
         connect,
         disconnect,

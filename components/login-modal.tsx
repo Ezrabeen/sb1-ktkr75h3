@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/auth-context"
 import { useWallet } from "@/contexts/wallet-context"
+import { useVeChain } from "@/providers/VeChainProvider"
 import { useToast } from "@/components/ui/use-toast"
 import { Loader2 } from "lucide-react"
 
@@ -20,13 +21,15 @@ interface LoginModalProps {
 }
 
 export function LoginModal({ isOpen, onClose }: LoginModalProps) {
-  const [activeTab, setActiveTab] = useState("login")
+  const [activeTab, setActiveTab] = useState("veworld")
   const [email, setEmail] = useState("")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [walletConnecting, setWalletConnecting] = useState(false)
   const { login, register, loginWithSocial } = useAuth()
-  const { connect } = useWallet()
+  const { connect: connectWallet } = useWallet()
+  const { connect: connectVeChain, account: veChainAccount, isConnecting } = useVeChain()
   const { toast } = useToast()
   const router = useRouter()
 
@@ -38,7 +41,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
       const success = await login(email, password)
       if (success) {
         // Connect wallet automatically after login
-        await connect()
+        await connectWallet()
         toast({
           title: "Login successful",
           description: "You have been logged in successfully",
@@ -67,7 +70,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
       const success = await register(username, email, password)
       if (success) {
         // Connect wallet automatically after registration
-        await connect()
+        await connectWallet()
         toast({
           title: "Registration successful",
           description: "Your account has been created successfully",
@@ -97,7 +100,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
 
       if (success) {
         // Connect wallet automatically after social login
-        await connect()
+        await connectWallet()
         toast({
           title: "Login successful",
           description: `You have been logged in with ${provider}`,
@@ -118,21 +121,140 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
     }
   }
 
+  const handleVeWorldLogin = async () => {
+    setWalletConnecting(true);
+    try {
+      // Connect to VeWorld/Sync2 with proper error handling
+      try {
+        await connectVeChain();
+        
+        if (veChainAccount) {
+          console.log('Wallet connected, proceeding with login:', veChainAccount);
+          
+          // Store the wallet address in a variable for clarity
+          const walletAddress = veChainAccount;
+          
+          // Login with the connected wallet address
+          const success = await loginWithSocial("veworld", walletAddress);
+          
+          if (success) {
+            toast({
+              title: "Login successful",
+              description: `Connected with wallet ${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`,
+            });
+            
+            // Additional logging for testnet confirmation
+            console.log('Connected to testnet with wallet:', walletAddress);
+            
+            onClose();
+            router.refresh();
+          } else {
+            toast({
+              title: "Login failed",
+              description: "There was an error logging in with wallet",
+              variant: "destructive",
+            });
+          }
+        } else {
+          console.error('No wallet account after connect');
+          toast({
+            title: "Wallet connection failed",
+            description: "Please make sure VeWorld wallet is installed and unlocked",
+            variant: "destructive",
+          });
+        }
+      } catch (connectionError: any) {
+        console.error("Wallet connection error:", connectionError);
+        
+        // Check for user rejection errors
+        if (connectionError.name === 'UserRejectedRequestError' || 
+            connectionError.message?.includes('Access Denied') ||
+            connectionError.message?.includes('User denied') ||
+            connectionError.message?.includes('User rejected')) {
+          toast({
+            title: "Access Denied",
+            description: "You have rejected the connection request. Please try again and approve the connection.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Connection failed",
+            description: "Could not connect to VeWorld wallet. Please check if it's installed and unlocked.",
+            variant: "destructive",
+          });
+        }
+      }
+    } catch (error) {
+      console.error("VeWorld login error:", error);
+      toast({
+        title: "Login failed",
+        description: "There was an error connecting to VeWorld wallet",
+        variant: "destructive",
+      });
+    } finally {
+      setWalletConnecting(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Account Access</DialogTitle>
           <DialogDescription>
-            Login or create an account to access all features including wallet connection.
+            Connect with VeWorld wallet or login with email and password.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="login" value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs defaultValue="veworld" value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="veworld">VeWorld</TabsTrigger>
             <TabsTrigger value="login">Login</TabsTrigger>
             <TabsTrigger value="register">Register</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="veworld" className="space-y-4 py-4">
+            <div className="p-4 border rounded-lg bg-muted/30 text-center space-y-4">
+              <img
+                src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-MvAahbVuY5U7kkd2xfevPJCjFFZFu2.png"
+                alt="VeWorld"
+                className="h-12 w-auto mx-auto"
+              />
+              <p className="text-sm text-muted-foreground">
+                The simplest way to log in is with VeWorld wallet. You'll be prompted to sign a message to verify your identity.
+              </p>
+              
+              <Button 
+                onClick={handleVeWorldLogin} 
+                className="w-full"
+                disabled={walletConnecting || isConnecting}
+              >
+                {(walletConnecting || isConnecting) ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <img
+                    src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/image-MvAahbVuY5U7kkd2xfevPJCjFFZFu2.png"
+                    alt="VeWorld"
+                    className="h-4 w-auto mr-2"
+                  />
+                )}
+                {walletConnecting || isConnecting ? "Connecting..." : "Connect with VeWorld"}
+              </Button>
+              
+              <p className="text-xs text-muted-foreground mt-4">
+                Don't have VeWorld wallet? <a href="https://www.veworld.com/" target="_blank" rel="noopener noreferrer" className="text-primary underline">Download here</a>
+              </p>
+              
+              <div className="pt-4 border-t mt-4">
+                <p className="text-xs text-muted-foreground mb-2">
+                  Alternative: If you don't have VeWorld, you can also use Sync2
+                </p>
+                <a href="https://sync.vecha.in/" target="_blank" rel="noopener noreferrer" className="text-primary underline text-xs">
+                  Download Sync2
+                </a>
+              </div>
+            </div>
+          </TabsContent>
 
           <TabsContent value="login" className="space-y-4 py-4">
             <form onSubmit={handleLogin} className="space-y-4">
@@ -177,7 +299,7 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
                 variant="outline"
                 type="button"
                 disabled={isLoading}
-                onClick={() => handleSocialLogin("veworld")}
+                onClick={() => setActiveTab("veworld")}
                 className="flex items-center justify-center gap-2"
               >
                 <img

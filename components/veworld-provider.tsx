@@ -1,13 +1,12 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import { ethers } from "ethers"
+import dynamic from 'next/dynamic'
 
 type VeWorldContextType = {
   isConnected: boolean
   account: string | null
-  provider: ethers.BrowserProvider | null
-  signer: ethers.Signer | null
+  connex: any | null
   balance: string
   connect: () => Promise<void>
   disconnect: () => void
@@ -17,8 +16,7 @@ type VeWorldContextType = {
 const VeWorldContext = createContext<VeWorldContextType>({
   isConnected: false,
   account: null,
-  provider: null,
-  signer: null,
+  connex: null,
   balance: "0",
   connect: async () => {},
   disconnect: () => {},
@@ -27,43 +25,81 @@ const VeWorldContext = createContext<VeWorldContextType>({
 
 export const useVeWorld = () => useContext(VeWorldContext)
 
+// Helper to format VET balance
+const formatVET = (wei: string): string => {
+  const vet = Number(wei) / Math.pow(10, 18);
+  return vet.toFixed(4);
+}
+
 export function VeWorldProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false)
   const [account, setAccount] = useState<string | null>(null)
-  const [provider, setProvider] = useState<ethers.BrowserProvider | null>(null)
-  const [signer, setSigner] = useState<ethers.Signer | null>(null)
+  const [connex, setConnex] = useState<any | null>(null)
   const [balance, setBalance] = useState("0")
   const [chainId, setChainId] = useState<number | null>(null)
+  const [connexClass, setConnexClass] = useState<any>(null);
+
+  // Initialize Connex
+  useEffect(() => {
+    const initConnex = async () => {
+      if (typeof window === 'undefined') return;
+      
+      try {
+        // Menggunakan dynamic import dengan ssr: false untuk mencegah loading di server
+        const Connex = (await import('@vechain/connex')).default;
+        const newConnex = new Connex({
+          node: 'https://testnet.vechain.org/',
+          network: 'test'
+        });
+        setConnex(newConnex);
+        setConnexClass(Connex);
+        setChainId(40);
+      } catch (error) {
+        console.error("Failed to initialize Connex:", error);
+      }
+    };
+    
+    initConnex();
+  }, []);
 
   // Connect to VeWorld wallet
   const connect = async () => {
+    if (typeof window === 'undefined') return;
+    
     try {
-      // Check if VeWorld wallet is available in window
-      if (typeof window !== "undefined" && window.ethereum) {
-        // Create ethers provider using window.ethereum
-        const ethersProvider = new ethers.BrowserProvider(window.ethereum)
+      if (!connex) {
+        alert("Connection to VeChain node failed. Please try again.");
+        return;
+      }
 
-        // Request account access
-        const accounts = await window.ethereum.request({
-          method: "eth_requestAccounts",
-        })
+      const vendor = connexClass ? new connexClass.Vendor('test') : null;
+      if (!vendor) return;
 
-        if (accounts.length > 0) {
-          // Get signer, account balance, and chain ID
-          const ethersSigner = await ethersProvider.getSigner()
-          const accountBalance = await ethersProvider.getBalance(accounts[0])
-          const { chainId: networkChainId } = await ethersProvider.getNetwork()
+      try {
+        const certificateResponse = await vendor.sign('cert', {
+          purpose: 'identification',
+          payload: {
+            type: 'text',
+            content: 'Please sign to connect to the app'
+          }
+        });
+        
+        const signer = certificateResponse.annex?.signer || 
+                      (certificateResponse as any).signer;
 
-          // Update state
-          setProvider(ethersProvider)
-          setSigner(ethersSigner)
-          setAccount(accounts[0])
-          setBalance(ethers.formatEther(accountBalance))
-          setChainId(Number(networkChainId))
-          setIsConnected(true)
+        if (signer) {
+          setAccount(signer);
+          const account = connex.thor.account(signer);
+          const accountInfo = await account.get();
+          setBalance(formatVET(accountInfo.balance));
+          
+          setIsConnected(true);
+        } else {
+          console.error('Tidak dapat menemukan alamat signer');
         }
-      } else {
-        alert("VeWorld wallet not found! Please install the VeWorld extension.")
+      } catch (error) {
+        console.error("Error connecting with Connex:", error);
+        alert("Failed to connect to VeWorld wallet. Make sure Sync2 is installed and unlocked.");
       }
     } catch (error) {
       console.error("Error connecting to VeWorld wallet:", error)
@@ -73,62 +109,41 @@ export function VeWorldProvider({ children }: { children: ReactNode }) {
   const disconnect = () => {
     setIsConnected(false)
     setAccount(null)
-    setProvider(null)
-    setSigner(null)
     setBalance("0")
-    setChainId(null)
   }
 
+  // Update balance periodically
   useEffect(() => {
-    // Check if already connected
-    if (typeof window !== "undefined" && window.ethereum) {
-      const checkConnection = async () => {
+    if (typeof window === 'undefined') return;
+    
+    let intervalId: NodeJS.Timeout;
+    
+    if (isConnected && connex && account) {
+      const updateBalance = async () => {
         try {
-          const accounts = await window.ethereum.request({
-            method: "eth_accounts",
-          })
-
-          if (accounts.length > 0) {
-            connect()
-          }
+          const accountObj = connex.thor.account(account);
+          const accountInfo = await accountObj.get();
+          setBalance(formatVET(accountInfo.balance));
         } catch (error) {
-          console.error("Error checking connection:", error)
+          console.error("Error updating balance:", error);
         }
-      }
-
-      checkConnection()
-
-      // Listen for account changes
-      window.ethereum.on("accountsChanged", (accounts: string[]) => {
-        if (accounts.length > 0) {
-          connect()
-        } else {
-          disconnect()
-        }
-      })
-
-      // Listen for chain changes
-      window.ethereum.on("chainChanged", () => {
-        connect()
-      })
+      };
+      
+      // Update balance every 30 seconds
+      intervalId = setInterval(updateBalance, 30000);
     }
-
-    // Cleanup listeners on unmount
+    
     return () => {
-      if (window.ethereum) {
-        window.ethereum.removeAllListeners("accountsChanged")
-        window.ethereum.removeAllListeners("chainChanged")
-      }
-    }
-  }, [])
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [isConnected, connex, account]);
 
   return (
     <VeWorldContext.Provider
       value={{
         isConnected,
         account,
-        provider,
-        signer,
+        connex,
         balance,
         connect,
         disconnect,

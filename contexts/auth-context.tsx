@@ -108,12 +108,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("user", JSON.stringify(updatedUser))
   }
 
-  // Register a new user
+  // Register a new user - modified to use actual wallet if available
   const register = async (username: string, email: string, password: string): Promise<boolean> => {
     setIsLoading(true)
     try {
-      // Generate a unique wallet address
-      const walletAddress = generateWalletAddress()
+      // Check if there's a wallet connected via VeChain provider before generating a random one
+      const veChainWallet = (window as any).vechain?.selectedAddress || null;
+      
+      // Use connected wallet or generate a unique wallet address
+      const walletAddress = veChainWallet || generateWalletAddress();
 
       // Create a new user profile
       const newUser: UserProfile = {
@@ -153,13 +156,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Login with email/username and password
+  // Login with email/username and password - modified to use actual wallet if available
   const login = async (identifier: string, password: string): Promise<boolean> => {
     setIsLoading(true)
     try {
-      // In a real app, this would validate credentials against a server
-      // For demo purposes, we'll create a mock user if one doesn't exist
-
+      // Check if there's a wallet connected via VeChain provider
+      const veChainWallet = (window as any).vechain?.selectedAddress || null;
+      
       // Check if user exists in localStorage
       const storedUser = localStorage.getItem("user")
       let userToLogin: UserProfile
@@ -167,13 +170,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (storedUser) {
         userToLogin = JSON.parse(storedUser)
 
+        // Update wallet address if a real one is connected
+        if (veChainWallet) {
+          userToLogin.walletAddress = veChainWallet;
+        }
+
         // Add B3TR balance if it doesn't exist
         if (!userToLogin.b3trBalance) {
           userToLogin.b3trBalance = generateRandomB3TRBalance()
         }
       } else {
         // Create a new user if one doesn't exist (for demo purposes)
-        const walletAddress = generateWalletAddress()
+        const walletAddress = veChainWallet || generateWalletAddress();
         userToLogin = {
           id: generateUserId(),
           username: identifier.includes("@") ? identifier.split("@")[0] : identifier,
@@ -191,7 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Update state
       setUser(userToLogin)
 
-      // Connect the demo wallet
+      // Connect the demo wallet with the actual wallet address
       await demoWallet.connect(userToLogin.walletAddress)
       demoWallet.setUserProfile({
         username: userToLogin.username,
@@ -202,7 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       toast({
         title: "Login successful",
-        description: "Welcome back!",
+        description: `Welcome back, ${userToLogin.username}!`,
       })
 
       return true
@@ -230,12 +238,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let username: string
       let email: string | null = null
       let phone: string | null = null
+      let walletAddress: string
 
       switch (provider) {
         case "veworld":
-          username = "VeWorld_User"
-          email = "veworld_user@example.com"
-          break
+          // Use the actual wallet address as identifier and username
+          walletAddress = identifier;
+          username = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+          email = `${walletAddress.toLowerCase()}@veworld.user`;
+          break;
         case "x":
           // Randomly choose between veHunt and veHunt3r
           if (Math.random() > 0.5) {
@@ -245,6 +256,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             username = "veHunt3r"
             email = "vehunt3r@gmail.com"
           }
+          walletAddress = generateWalletAddress();
           break
         case "google":
           // Randomly choose between the provided email and hershel
@@ -255,19 +267,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             username = "hershel"
             email = "hershelbeen@gmail.com"
           }
+          walletAddress = generateWalletAddress();
           break
         case "phone":
           username = `user_${identifier.replace(/\D/g, "").slice(-4)}`
           phone = identifier
+          walletAddress = generateWalletAddress();
           break
         default:
           username = "user"
+          walletAddress = generateWalletAddress();
       }
 
-      // Generate a unique wallet address
-      const walletAddress = generateWalletAddress()
-
-      // Create a new user profile
+      // Create a new user profile with the correct wallet address
       const newUser: UserProfile = {
         id: generateUserId(),
         username,
@@ -284,7 +296,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Update state
       setUser(newUser)
 
-      // Connect the demo wallet
+      // Connect the demo wallet with the actual wallet address
       await demoWallet.connect(walletAddress)
       demoWallet.setUserProfile({
         username,
@@ -324,7 +336,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  // Update user profile
+  // UpdateProfile with improved wallet handling
   const updateProfile = async (
     data: Partial<Omit<UserProfile, "id" | "walletAddress" | "createdAt">>,
   ): Promise<boolean> => {
@@ -332,10 +344,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setIsLoading(true)
     try {
+      // Check if there's a wallet connected via VeChain provider
+      const veChainWallet = (window as any).vechain?.selectedAddress || null;
+      
       // Update user data
       const updatedUser = {
         ...user,
         ...data,
+        // Use connected wallet if available and different from stored one
+        walletAddress: veChainWallet || user.walletAddress,
       }
 
       // Store updated user in localStorage

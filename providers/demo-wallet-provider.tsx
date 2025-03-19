@@ -1,7 +1,6 @@
 "use client"
 
 import { createContext, useContext, useState, type ReactNode } from "react"
-import { ethers } from "ethers"
 import { appConfig } from "@/config/app-config"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -53,6 +52,13 @@ export const useDemoWallet = () => useContext(DemoWalletContext)
 // Generate a random transaction hash
 const generateTxHash = () => {
   return `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`
+}
+
+// Helper to parse string to Wei (VET has 18 decimals like ETH)
+const parseVET = (amount: string): string => {
+  const amountFloat = parseFloat(amount);
+  const amountBigInt = BigInt(Math.floor(amountFloat * 10**18));
+  return amountBigInt.toString();
 }
 
 // Demo wallet provider component
@@ -159,7 +165,7 @@ export function DemoWalletProvider({ children }: { children: ReactNode }) {
       [hash]: {
         from: account,
         to,
-        value: ethers.parseEther(amount),
+        value: parseVET(amount),
         hash,
         blockNumber: Math.floor(Math.random() * 1000000),
         status: 1, // success
