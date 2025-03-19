@@ -2,6 +2,19 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 
+/**
+ * VeChainProvider
+ * 
+ * This provider integrates with VeChain blockchain by creating and managing the Connex instance.
+ * It handles wallet connection, transaction signing, and blockchain interaction.
+ * 
+ * Key responsibilities:
+ * - Initialize connection to the VeChain network
+ * - Manage wallet connection state
+ * - Provide blockchain interaction methods to child components
+ * - Handle network switching between mainnet and testnet
+ */
+
 // Types for wallets
 interface WalletAccount {
   address: string;

@@ -5,6 +5,22 @@ import { useTransaction } from "@/contexts/transaction-context"
 import type { Product } from "@/data/products"
 import { useToast } from "@/components/ui/use-toast"
 
+/**
+ * CartContext
+ * 
+ * This context manages the shopping cart functionality throughout the application.
+ * It handles the storage and manipulation of cart items, allowing users to:
+ * 
+ * - Add products to cart
+ * - Remove products from cart
+ * - Update product quantities
+ * - Calculate total prices
+ * - Persist cart state across sessions
+ * 
+ * The context uses local storage to maintain cart state between page refreshes
+ * and provides cart operations to all child components.
+ */
+
 export type CartItem = {
   id: string
   productId: string

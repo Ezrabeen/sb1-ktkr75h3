@@ -1,3 +1,20 @@
+/**
+ * Contract Utilities
+ * 
+ * This module provides utility functions for interacting with smart contracts
+ * on the VeChain blockchain. It includes functionality for:
+ * 
+ * - Connecting to smart contracts
+ * - Calling contract methods
+ * - Encoding contract data
+ * - Handling contract events
+ * - Managing token transfers
+ * - Decoding blockchain responses
+ * 
+ * These utilities abstract the complexity of direct blockchain interaction
+ * and provide a simplified interface for the application's features.
+ */
+
 import Connex from '@vechain/connex'
 import { formatEther } from './utils';
 

@@ -1,3 +1,19 @@
+/**
+ * Home Page
+ * 
+ * The main landing page for the ReVive marketplace.
+ * This page includes:
+ * 
+ * - Hero section showcasing the platform's value proposition
+ * - Featured products section with sustainable items
+ * - Key features and benefits of using the marketplace
+ * - Call-to-action sections for user engagement
+ * - Integration with VeChain wallet for blockchain functionality
+ * 
+ * The page is designed to introduce users to the concept of sustainable
+ * shopping powered by blockchain technology.
+ */
+
 import { ProductGrid } from "@/components/product-grid"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, Leaf, Recycle, ShieldCheck, Zap } from "lucide-react"

@@ -1,3 +1,19 @@
+/**
+ * Sustainability Utilities
+ * 
+ * This module provides functions for interacting with sustainability-related features
+ * on the VeChain blockchain. It includes functionality for:
+ * 
+ * - Calculating carbon offsets
+ * - Tracking user sustainability scores
+ * - Verifying sustainable product attributes
+ * - Managing sustainability credentials
+ * - Generating impact reports
+ * 
+ * These utilities help verify and track the environmental impact of products
+ * and user activities within the marketplace.
+ */
+
 import { SUSTAINABILITY_TRACKING_ABI, CONTRACT_ADDRESSES } from './contract-utils';
 
 // Tipe data untuk informasi keberlanjutan

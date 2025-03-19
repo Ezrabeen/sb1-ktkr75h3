@@ -17,6 +17,23 @@ import { cn } from "@/lib/utils"
 import type { Product } from "@/data/products"
 import { useToast } from "@/components/ui/use-toast"
 
+/**
+ * Product Card Component
+ * 
+ * Displays individual product information in a card format throughout the marketplace.
+ * This component includes:
+ * 
+ * - Product image with optimized loading
+ * - Product details (name, price, sustainability score)
+ * - Add to cart functionality
+ * - Add to wishlist toggle
+ * - Quick view options
+ * - Sustainability indicators
+ * 
+ * The component is responsive and adapts to different screen sizes while
+ * maintaining consistent styling and functionality.
+ */
+
 interface ProductCardProps {
   id: string
   name: string

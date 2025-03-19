@@ -18,6 +18,24 @@ import { LoginModal } from "@/components/login-modal"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { LanguageSwitcher } from "@/components/language-switcher"
 
+/**
+ * Navbar Component
+ * 
+ * The main navigation bar for the application that appears on all pages.
+ * This component provides:
+ * 
+ * - Site navigation links
+ * - User authentication controls
+ * - Cart and wishlist access
+ * - Wallet connection button
+ * - Mobile responsive menu
+ * - Theme toggle
+ * - Language switcher
+ * 
+ * The Navbar adapts to different user authentication states and screen sizes,
+ * providing appropriate navigation options and responsive behavior.
+ */
+
 export function Navbar() {
   const router = useRouter()
   const pathname = usePathname()

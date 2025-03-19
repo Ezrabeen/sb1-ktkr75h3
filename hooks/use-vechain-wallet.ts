@@ -4,6 +4,21 @@ import { useState, useEffect, useCallback } from "react"
 import { useMockVeChain } from "./use-mock-vechain"
 import { v4 as uuidv4 } from "uuid"
 
+/**
+ * useVeChainWallet Hook
+ * 
+ * A custom hook that provides wallet connection and interaction capabilities with the VeChain blockchain.
+ * This hook abstracts the complexity of dealing with VeChain wallets and provides a simple interface for:
+ * 
+ * - Connecting to various wallet providers (Sync2, VeWorld)
+ * - Managing wallet connection state
+ * - Retrieving account balances
+ * - Handling network changes
+ * - Contract interactions via the Connex instance
+ * 
+ * The hook integrates with Thor (VeChain's blockchain) and provides typed interfaces for blockchain operations.
+ */
+
 // Define interfaces for Connex and Thor
 // These are specific to VeChain and different from Web3
 interface Connex {
