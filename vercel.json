@@ -3,8 +3,14 @@
   "buildCommand": "pnpm build",
   "installCommand": "pnpm install",
   "framework": "nextjs",
-  "regions": ["sin1"],
+  "regions": ["iad1"],
   "github": {
     "silent": true
-  }
+  },
+  "builds": [
+    {
+      "src": "next.config.mjs",
+      "use": "@vercel/next"
+    }
+  ]
 } 

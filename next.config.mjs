@@ -7,6 +7,7 @@ try {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  output: 'standalone',
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -16,11 +17,20 @@ const nextConfig = {
   distDir: 'dist',
   images: {
     unoptimized: true,
+    domains: [
+      'images.unsplash.com',
+      'via.placeholder.com',
+      'hebbkx1anhila5yf.public.blob.vercel-storage.com'
+    ],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+    ],
   },
   experimental: {
     webpackBuildWorker: true,
-    parallelServerBuildTraces: true,
-    parallelServerCompiles: true,
   },
 }
 
